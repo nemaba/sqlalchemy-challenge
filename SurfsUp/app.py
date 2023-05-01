@@ -42,65 +42,57 @@ app = Flask(__name__)
 #################################################
 # Flask Routes
 #################################################
+
 @app.route("/")
 def main():
     return(
         f"Climate changes in Hawaii<br />"
         f"Available Routes<br />"
         f"Rainfall from last year: /api/v1.0/precipitation<br />"
-        f"/api.v1.0/stations<br />"
-        f"/api.v1.0/tobs<br />"
-        f"/api.v1.0/<start><br />"
-        f"/api.v1.0/<start>/<end><br />"
+        f"/api/v1.0/stations<br />"
+        f"/api/v1.0/tobs<br />"
+        f"/api/v1.0/yyyy-mm-dd<br/>"
+        f" /api/v1.0/yyyy-mm-dd/yyyy-mm-dd"
           
     )
 
+# precipitation route 
 # Create precipitation routes for the last 12 months 
-@app.route("/api.v1.0/precipitation")
+@app.route("/api/v1.0/precipitation")
 def raining():
     prev_year = dt.date(2017, 8, 23) - dt.timedelta(days = 365)
     results = session.query(Measurement.date, Measurement.prcp).filter(Measurement.date >= prev_year).order_by(Measurement.date).all()
-
-    # 2.Convert results to a dict with date as key and prcp as value
     result_dict = dict(results)
     session.close()
-
-    # 2. return the json representation of your dictionary
     return jsonify(result_dict)
 
-    # 3. Create the station route of a list of the stations from the dataset
-app.route("/api/v1.0/stations")
-
+# station route
+# Returns jsonified data of all of the stations in the database
+@app.route("/api/v1.0/stations")
 def stations():
-    stations = session.query(Measurement.station, func.count(Measurement.id)).\
-        group_by(Measurement.station).order_by(func.count(Measurement.id).desc()).all()
-    #Convert results to a dict
-    stations_dict = dict(stations)
+    result= session.query(Station.station).all()
     session.close()
+    station_name= list(np.ravel(result))
+    return jsonify (station_name)
 
-    # Return the json representation of your dictionary
-    return jsonify(stations_dict)
-
+#  tobs route Returns jsonified data for the most active station (USC00519281) 
+#  Only returns the jsonified data for the last year of data 
 @app.route("/api/v1.0/tobs")
-
 def tobs():
-    max_temp_obs = session.query(Measurement.station, Measurement.tobs).filter(Measurement.date >= '2016-08-23').all()
+    max_temp_obs = session.query(Measurement.date, Measurement.tobs).filter(Measurement.station == 'USC00519281', Measurement.date >= '2016-08-23').all()
  
-    # Create dict
-    tobs_dict = dict(max_temp_obs)
+    tobs= list(np.ravel(max_temp_obs))
     session.close()
+    return jsonify(tobs)
 
-    # Return Json representation of the dict
-    return jsonify(tobs_dict)
-
+# A start route that accepts the start date as a parameter from the URL
+# Returns the min, max, and average temperatures calculated from the given start date to the end of the dataset 
 @app.route("/api/v1.0/<start>")
-
-
 def start(start):
     result = session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs),
                            func.max(Measurement.tobs)).filter(Measurement.date >= start).all()
     session.close()
-    #Create an empty list to hold values
+  
     temp_stats = []
     for min, avg, max in result:
         tobs_dict = {}
@@ -109,13 +101,14 @@ def start(start):
         tobs_dict["Max"] = max
         temp_stats.append(tobs_dict)
     return jsonify(temp_stats) 
-@app.route('/api/v1.0/<start>/<end>')
 
+# start/end route that accepts the start and end dates as parameters from the URL 
+# Returns the min, max, and average temperatures calculated from the given start date to the given end date 
+@app.route('/api/v1.0/<start>/<end>')
 def start_end(start,end):
     start_ending = session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs),
                            func.max(Measurement.tobs)).filter(Measurement.date >= start).filter(Measurement.date <= end).all()
     session.close()
-    #Create an empty list to hold values
     all_stats = []
     for min, avg, max in start_ending:
         tobs_dict = {}
